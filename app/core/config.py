@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -45,17 +46,23 @@ class Settings(BaseSettings):
     @property
     def async_database_url(self) -> str:
         """Sanitizes Render / Heroku / Railway connection strings for SQLAlchemy asyncpg."""
-        url = self.DATABASE_URL
+        url = self.DATABASE_URL.strip()
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif url.startswith("postgresql://") and "+asyncpg" not in url:
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        
+        # asyncpg does not accept ?sslmode=... in the connection URI
+        if "sslmode=" in url:
+            url = re.sub(r'[\?&]sslmode=[^&]+', '', url)
+            if url.endswith("?"):
+                url = url[:-1]
         return url
 
     @property
     def sync_database_url(self) -> str:
         """Sanitizes connection strings for synchronous Celery worker / psycopg2."""
-        url = self.SYNC_DATABASE_URL or self.DATABASE_URL
+        url = (self.SYNC_DATABASE_URL or self.DATABASE_URL).strip()
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql+psycopg2://", 1)
         elif url.startswith("postgresql://") and "+psycopg2" not in url:

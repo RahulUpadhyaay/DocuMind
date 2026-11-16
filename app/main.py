@@ -27,7 +27,11 @@ async def lifespan(app: FastAPI):
             await conn.run_sync(Base.metadata.create_all)
             app_logger.info("Database extensions and schemas verified successfully.")
     except Exception as e:
-        app_logger.warning(f"Database auto-migration notice: {e}")
+        safe_host = settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else settings.DATABASE_URL
+        app_logger.error(
+            f"CRITICAL DATABASE ERROR: Could not connect to database target [{safe_host}]. "
+            f"If deploying on Render, please verify that DATABASE_URL is set in your Render Service Environment Variables. Error: {e}"
+        )
 
     yield
 

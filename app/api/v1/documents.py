@@ -62,33 +62,40 @@ async def upload_document(
     # Compute SHA-256 hash for deduplication per tenant
     content_hash = hashlib.sha256(file_bytes).hexdigest()
 
-    # Check if duplicate exists for this tenant
-    stmt = select(Document).where(Document.tenant_id == tenant.id, Document.content_hash == content_hash)
-    result = await db.execute(stmt)
-    existing_doc = result.scalar_one_or_none()
-    if existing_doc:
-        return DocumentResponse(
-            id=existing_doc.id,
-            filename=existing_doc.filename,
-            file_size_bytes=existing_doc.file_size_bytes,
-            status=existing_doc.status,
-            total_pages=existing_doc.total_pages,
-            error_message=existing_doc.error_message,
-            created_at=existing_doc.created_at.isoformat(),
-        )
+    try:
+        # Check if duplicate exists for this tenant
+        stmt = select(Document).where(Document.tenant_id == tenant.id, Document.content_hash == content_hash)
+        result = await db.execute(stmt)
+        existing_doc = result.scalar_one_or_none()
+        if existing_doc:
+            return DocumentResponse(
+                id=existing_doc.id,
+                filename=existing_doc.filename,
+                file_size_bytes=existing_doc.file_size_bytes,
+                status=existing_doc.status,
+                total_pages=existing_doc.total_pages,
+                error_message=existing_doc.error_message,
+                created_at=existing_doc.created_at.isoformat(),
+            )
 
-    # Create new document record
-    new_doc = Document(
-        tenant_id=tenant.id,
-        filename=filename,
-        file_size_bytes=file_size,
-        content_hash=content_hash,
-        status="pending",
-        total_pages=0,
-    )
-    db.add(new_doc)
-    await db.commit()
-    await db.refresh(new_doc)
+        # Create new document record
+        new_doc = Document(
+            tenant_id=tenant.id,
+            filename=filename,
+            file_size_bytes=file_size,
+            content_hash=content_hash,
+            status="pending",
+            total_pages=0,
+        )
+        db.add(new_doc)
+        await db.commit()
+        await db.refresh(new_doc)
+    except Exception as db_err:
+        app_logger.error(f"Database error during document registration: {db_err}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Database connection failed ({type(db_err).__name__}). Please check DATABASE_URL in your Render environment variables.",
+        )
 
     # Enqueue task: Try Celery first, fallback to FastAPI BackgroundTasks if Redis is offline
     dispatched_to_celery = False

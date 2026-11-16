@@ -3,13 +3,23 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from app.core.config import settings
 
+# Determine if SSL is required for cloud database providers
+async_connect_args = {}
+sync_connect_args = {}
+
+db_url_lower = settings.DATABASE_URL.lower()
+if any(cloud in db_url_lower for cloud in ["render.com", "neon.tech", "supabase", "aws", "sslmode=require"]):
+    async_connect_args["ssl"] = "require"
+
 # Async Engine for FastAPI Request Lifecycle
 async_engine = create_async_engine(
     settings.async_database_url,
+    connect_args=async_connect_args,
     echo=(settings.ENVIRONMENT == "development"),
-    pool_size=20,
-    max_overflow=10,
+    pool_size=10,
+    max_overflow=5,
     pool_pre_ping=True,
+    pool_timeout=10,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -26,6 +36,7 @@ sync_engine = create_engine(
     pool_size=10,
     max_overflow=5,
     pool_pre_ping=True,
+    pool_timeout=10,
 )
 
 SyncSessionLocal = sessionmaker(

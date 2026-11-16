@@ -67,7 +67,7 @@ async def upload_document(
         stmt = select(Document).where(Document.tenant_id == tenant.id, Document.content_hash == content_hash)
         result = await db.execute(stmt)
         existing_doc = result.scalar_one_or_none()
-        if existing_doc:
+        if existing_doc and existing_doc.status == "indexed":
             return DocumentResponse(
                 id=existing_doc.id,
                 filename=existing_doc.filename,
@@ -77,19 +77,26 @@ async def upload_document(
                 error_message=existing_doc.error_message,
                 created_at=existing_doc.created_at.isoformat(),
             )
-
-        # Create new document record
-        new_doc = Document(
-            tenant_id=tenant.id,
-            filename=filename,
-            file_size_bytes=file_size,
-            content_hash=content_hash,
-            status="pending",
-            total_pages=0,
-        )
-        db.add(new_doc)
-        await db.commit()
-        await db.refresh(new_doc)
+        elif existing_doc:
+            # If document previously failed or was interrupted, re-enqueue it for indexing!
+            new_doc = existing_doc
+            new_doc.status = "processing"
+            new_doc.error_message = None
+            await db.commit()
+            await db.refresh(new_doc)
+        else:
+            # Create new document record
+            new_doc = Document(
+                tenant_id=tenant.id,
+                filename=filename,
+                file_size_bytes=file_size,
+                content_hash=content_hash,
+                status="pending",
+                total_pages=0,
+            )
+            db.add(new_doc)
+            await db.commit()
+            await db.refresh(new_doc)
     except Exception as db_err:
         app_logger.error(f"Database error during document registration: {db_err}")
         raise HTTPException(

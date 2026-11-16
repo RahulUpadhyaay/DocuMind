@@ -65,24 +65,53 @@ CRITICAL RULES:
         return {t for t in tokens if len(t) > 2 and t not in STOP_WORDS}
 
     @classmethod
+    def _word_matches_text(cls, word: str, text: str) -> bool:
+        """Morphological and stem-aware word match that handles plurals (penalty -> penalties), verb forms, and roots."""
+        word = word.lower()
+        if word in text:
+            return True
+        # Stemming rules
+        stem = word
+        if word.endswith("ies") and len(word) > 4:
+            stem = word[:-3] + "y"
+        elif word.endswith("es") and len(word) > 3:
+            stem = word[:-2]
+        elif word.endswith("s") and not word.endswith("ss") and len(word) > 3:
+            stem = word[:-1]
+        elif word.endswith("ing") and len(word) > 5:
+            stem = word[:-3]
+        elif word.endswith("ed") and len(word) > 4:
+            stem = word[:-2]
+        
+        if stem in text:
+            return True
+        
+        # 4-character root prefix (e.g. penalt -> penalties)
+        if len(word) >= 4 and word[:4] in text:
+            return True
+
+        return False
+
+    @classmethod
     def _check_content_relevance(cls, query: str, passages: List[SearchResult]) -> bool:
         """Determines if the passages have any meaningful topical overlap with the query."""
         if not passages:
             return False
+
+        # If top candidate has high hybrid / reranker score, it is topically relevant
+        top_score = max((p.score for p in passages), default=0.0)
+        if top_score >= 0.45:
+            return True
 
         keywords = cls._extract_query_keywords(query)
         if not keywords:
             return True
 
         combined_text = " ".join([p.content.lower() for p in passages])
-        matching_keywords = {kw for kw in keywords if kw in combined_text}
+        matching_keywords = {kw for kw in keywords if cls._word_matches_text(kw, combined_text)}
 
-        # If zero keywords match, or less than 25% of query keywords match, it's irrelevant
-        if not matching_keywords:
-            return False
-        
-        ratio = len(matching_keywords) / len(keywords)
-        return ratio >= 0.25
+        # If at least 1 keyword matches
+        return len(matching_keywords) >= 1
 
     @classmethod
     def _format_context(cls, passages: List[SearchResult]) -> str:
@@ -125,7 +154,7 @@ CRITICAL RULES:
             sentences = re.split(r'(?<=[.!?])\s+|\n+', p.content)
             for s in sentences:
                 s_clean = s.strip()
-                if len(s_clean) > 20 and any(kw in s_clean.lower() for kw in keywords):
+                if len(s_clean) > 15 and (any(cls._word_matches_text(kw, s_clean.lower()) for kw in keywords) or not keywords):
                     if s_clean not in relevant_sentences:
                         relevant_sentences.append(s_clean)
                         matching_citations.append(

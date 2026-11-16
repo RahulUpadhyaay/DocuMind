@@ -32,6 +32,9 @@ def execute_document_ingestion(document_id_str: str, file_bytes: bytes, filename
 
             doc.total_pages = len(pages)
 
+            # Clean any old chunks if re-indexing
+            session.query(DocumentChunk).filter(DocumentChunk.document_id == doc.id).delete()
+
             # 3. Chunk text keeping page references
             chunker = DocumentChunker()
             chunks = chunker.chunk_pages(pages)

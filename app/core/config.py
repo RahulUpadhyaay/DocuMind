@@ -61,10 +61,23 @@ class Settings(BaseSettings):
 
     @property
     def sync_database_url(self) -> str:
-        """Sanitizes connection strings for synchronous Celery worker / psycopg2."""
-        url = (self.SYNC_DATABASE_URL or self.DATABASE_URL).strip()
+        """Sanitizes connection strings for synchronous Celery worker / psycopg2.
+        If SYNC_DATABASE_URL points to localhost while DATABASE_URL is set to a remote host (e.g. Render),
+        automatically derive the sync URL from DATABASE_URL.
+        """
+        raw_sync = (self.SYNC_DATABASE_URL or "").strip()
+        raw_db = (self.DATABASE_URL or "").strip()
+
+        # If sync URL is pointing to localhost but main DB is remote, use main DB!
+        if ("localhost" in raw_sync or "127.0.0.1" in raw_sync) and ("localhost" not in raw_db and "127.0.0.1" not in raw_db):
+            url = raw_db
+        else:
+            url = raw_sync or raw_db
+
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+        elif "+asyncpg" in url:
+            url = url.replace("+asyncpg", "+psycopg2", 1)
         elif url.startswith("postgresql://") and "+psycopg2" not in url:
             url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
         return url

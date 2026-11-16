@@ -616,17 +616,23 @@ This Agreement shall be construed and governed in all respects under the laws of
           body: JSON.stringify({ query, top_k: topK })
         });
 
+        if (!resp.ok) {
+          const errData = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}: ${resp.statusText}` }));
+          throw new Error(errData.detail || 'Query request failed');
+        }
+
         const data = await resp.json();
         state.lastResponse = data;
         displayResponse(data);
       } catch (err) {
-        answerContent.textContent = "Error executing query: " + err.message;
+        answerContent.innerHTML = `<span class="text-red-400 font-medium">Query Error: ${err.message}</span>`;
       }
     }
 
     // SSE Streaming Query via Fetch ReadableStream
     async function executeStreamingQuery(query, topK) {
       streamCursor.classList.remove('hidden');
+      answerContent.textContent = '';
       try {
         const response = await fetch('/api/v1/query/stream', {
           method: 'POST',
@@ -636,6 +642,11 @@ This Agreement shall be construed and governed in all respects under the laws of
           },
           body: JSON.stringify({ query, top_k: topK })
         });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({ detail: `HTTP ${response.status}: ${response.statusText}` }));
+          throw new Error(errData.detail || 'Streaming connection rejected');
+        }
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -647,32 +658,41 @@ This Agreement shall be construed and governed in all respects under the laws of
           if (done) break;
 
           buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n\n');
-          buffer = lines.pop(); // Keep last partial chunk
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() || ''; // Keep last incomplete line
 
           for (const line of lines) {
-            const match = line.match(/^data:\s*(.*)$/m);
-            if (match) {
-              try {
-                const parsed = JSON.parse(match[1]);
-                if (parsed.type === 'token') {
-                  fullAnswer += parsed.content;
-                  answerContent.innerHTML = formatMarkdown(fullAnswer);
-                } else if (parsed.type === 'final') {
-                  state.lastResponse = {
-                    answer: fullAnswer,
-                    confidence: parsed.confidence,
-                    citations: parsed.citations,
-                    information_found: parsed.information_found
-                  };
-                  displayFinalMetadata(parsed);
+            const trimmed = line.trim();
+            if (trimmed.startsWith('data:')) {
+              const jsonStr = trimmed.slice(5).trim();
+              if (jsonStr) {
+                try {
+                  const parsed = JSON.parse(jsonStr);
+                  if (parsed.type === 'token') {
+                    fullAnswer += parsed.content;
+                    answerContent.innerHTML = formatMarkdown(fullAnswer);
+                  } else if (parsed.type === 'final') {
+                    state.lastResponse = {
+                      answer: fullAnswer,
+                      confidence: parsed.confidence,
+                      citations: parsed.citations,
+                      information_found: parsed.information_found
+                    };
+                    displayFinalMetadata(parsed);
+                  }
+                } catch (parseErr) {
+                  console.warn("SSE JSON Parse error:", parseErr, jsonStr);
                 }
-              } catch (e) {}
+              }
             }
           }
         }
+
+        if (!fullAnswer && !state.lastResponse) {
+          answerContent.textContent = "I cannot find this information in the uploaded documents.";
+        }
       } catch (err) {
-        answerContent.textContent = "Streaming error: " + err.message;
+        answerContent.innerHTML = `<span class="text-red-400 font-medium">Streaming error: ${err.message}</span>`;
       } finally {
         streamCursor.classList.add('hidden');
       }

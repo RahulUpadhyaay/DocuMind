@@ -104,22 +104,21 @@ async def upload_document(
             detail=f"Database connection failed ({type(db_err).__name__}). Please check DATABASE_URL in your Render environment variables.",
         )
 
-    # Enqueue task: Try Celery first, fallback to FastAPI BackgroundTasks if Redis is offline
-    dispatched_to_celery = False
+    # Execute ingestion immediately in background task (guaranteed zero-downtime execution on single-container deployments)
+    background_tasks.add_task(execute_document_ingestion, str(new_doc.id), file_bytes, filename)
+
+    # Also notify Celery worker if provisioned
     try:
         file_b64 = base64.b64encode(file_bytes).decode("utf-8")
         process_document_celery.delay(str(new_doc.id), file_b64, filename)
-        dispatched_to_celery = True
-        app_logger.info(f"Enqueued document {new_doc.id} to Celery worker.")
-    except Exception as e:
-        app_logger.warning(f"Could not connect to Celery/Redis ({e}). Executing with FastAPI BackgroundTasks.")
-        background_tasks.add_task(execute_document_ingestion, str(new_doc.id), file_bytes, filename)
+    except Exception:
+        pass
 
     return DocumentResponse(
         id=new_doc.id,
         filename=new_doc.filename,
         file_size_bytes=new_doc.file_size_bytes,
-        status="pending" if dispatched_to_celery else "processing",
+        status="processing",
         total_pages=0,
         error_message=None,
         created_at=new_doc.created_at.isoformat(),

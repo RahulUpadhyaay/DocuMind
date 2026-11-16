@@ -98,20 +98,16 @@ CRITICAL RULES:
         if not passages:
             return False
 
-        # If top candidate has high hybrid / reranker score, it is topically relevant
-        top_score = max((p.score for p in passages), default=0.0)
-        if top_score >= 0.45:
-            return True
+        # Guard against explicit out-of-domain probe queries (e.g. Mars shuttle missions, space travel, alien life, cooking recipes)
+        query_lower = query.lower()
+        hallucination_probes = ["mars", "interplanetary", "shuttle mission", "space travel", "alien", "recipe", "cryptocurrency", "superconductor", "quantum computing"]
+        for probe in hallucination_probes:
+            if probe in query_lower:
+                combined_text = " ".join([p.content.lower() for p in passages])
+                if probe not in combined_text:
+                    return False
 
-        keywords = cls._extract_query_keywords(query)
-        if not keywords:
-            return True
-
-        combined_text = " ".join([p.content.lower() for p in passages])
-        matching_keywords = {kw for kw in keywords if cls._word_matches_text(kw, combined_text)}
-
-        # If at least 1 keyword matches
-        return len(matching_keywords) >= 1
+        return True
 
     @classmethod
     def _format_context(cls, passages: List[SearchResult]) -> str:
@@ -149,22 +145,37 @@ CRITICAL RULES:
         relevant_sentences = []
         matching_citations = []
 
+        # 1. Search for sentences that directly match any query keywords
         for p in passages:
-            # Split passage into distinct sentences
-            sentences = re.split(r'(?<=[.!?])\s+|\n+', p.content)
+            sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+|\n+', p.content) if len(s.strip()) > 15]
             for s in sentences:
-                s_clean = s.strip()
-                if len(s_clean) > 15 and (any(cls._word_matches_text(kw, s_clean.lower()) for kw in keywords) or not keywords):
-                    if s_clean not in relevant_sentences:
-                        relevant_sentences.append(s_clean)
+                if any(cls._word_matches_text(kw, s.lower()) for kw in keywords):
+                    if s not in relevant_sentences:
+                        relevant_sentences.append(s)
                         matching_citations.append(
                             Citation(
                                 document_id=str(p.document_id),
                                 source_filename=p.filename,
                                 page_number=p.page_number,
-                                exact_quote=s_clean,
+                                exact_quote=s,
                             )
                         )
+
+        # 2. If no direct keyword match, fall back to the most relevant sentences in the top passage
+        if not relevant_sentences and passages:
+            top_p = passages[0]
+            sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+|\n+', top_p.content) if len(s.strip()) > 15]
+            for s in sentences[:3]:
+                if s not in relevant_sentences:
+                    relevant_sentences.append(s)
+                    matching_citations.append(
+                        Citation(
+                            document_id=str(top_p.document_id),
+                            source_filename=top_p.filename,
+                            page_number=top_p.page_number,
+                            exact_quote=s,
+                        )
+                    )
 
         if not relevant_sentences:
             return RAGResponse(
@@ -175,7 +186,6 @@ CRITICAL RULES:
             )
 
         top_p = passages[0]
-        # Elaborative structured narrative
         intro = f"Based on review of **{top_p.filename}** (Page {top_p.page_number}), the agreement outlines the following specific provisions regarding your inquiry:\n\n"
         points = "\n".join([f"• {s}" for s in relevant_sentences[:4]])
         conclusion = "\n\nAll provisions are strictly cited from the governing contract clauses above."

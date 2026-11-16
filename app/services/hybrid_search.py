@@ -54,7 +54,7 @@ class HybridSearchService:
             .join(Document, DocumentChunk.document_id == Document.id)
             .where(
                 DocumentChunk.tenant_id == self.tenant_id,
-                Document.status == "indexed",
+                Document.status.in_(["indexed", "processing"]),
             )
         )
 
@@ -107,7 +107,7 @@ class HybridSearchService:
             .join(Document, DocumentChunk.document_id == Document.id)
             .where(
                 DocumentChunk.tenant_id == self.tenant_id,
-                Document.status == "indexed",
+                Document.status.in_(["indexed", "processing"]),
                 DocumentChunk.tsv_content.op("@@")(ts_query),
             )
         )

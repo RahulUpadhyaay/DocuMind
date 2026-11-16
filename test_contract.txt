@@ -1,0 +1,4 @@
+SECTION 4: TERMINATION & CANCELLATION PENALTIES
+4.1 Early Cancellation Notice: Either party may terminate this agreement by providing thirty (30) days written notice.
+4.2 Penalty Fee: If the Client terminates this contract within the first thirty (30) days of execution, a cancellation fee equal to 15% of the total agreement value shall apply immediately.
+4.3 Governing Law: This contract shall be governed in accordance with the laws of Delaware.

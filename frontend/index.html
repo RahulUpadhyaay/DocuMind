@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enterprise Document Intelligence & RAG Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#10b981',
+              600: '#059669',
+              900: '#064e3b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #090d16;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
+        radial-gradient(at 50% 50%, rgba(139, 92, 246, 0.04) 0px, transparent 60%);
+      background-attachment: fixed;
+    }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .glass-card-hover:hover {
+      border-color: rgba(16, 185, 129, 0.3);
+      box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.15);
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.5);
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 9999px;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .live-pulse {
+      animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    .cursor-blink {
+      display: inline-block;
+      width: 2px;
+      height: 1.1em;
+      background-color: #10b981;
+      margin-left: 2px;
+      vertical-align: middle;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+  </style>
+</head>
+<body class="text-slate-200 antialiased min-h-screen flex flex-col font-sans">
+
+  <!-- TOP NAVIGATION HEADER -->
+  <header class="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+          <i data-lucide="layers" class="w-5 h-5 text-slate-950 font-bold"></i>
+        </div>
+        <div>
+          <span class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+            DocuMind <span class="text-emerald-400 font-mono text-sm uppercase px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 ml-1">RAG API</span>
+          </span>
+          <span class="block text-[11px] text-slate-400 font-medium">Enterprise Document Intelligence & Citation Engine</span>
+        </div>
+      </div>
+
+      <!-- Live Cluster Status Badges -->
+      <div class="hidden md:flex items-center space-x-3 text-xs">
+        <div class="flex items-center space-x-2 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 live-pulse"></span>
+          <span>pgvector HNSW</span>
+        </div>
+        <div class="flex items-center space-x-2 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
+          <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+          <span>BM25 Sparse</span>
+        </div>
+        <div class="flex items-center space-x-2 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
+          <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+          <span>Celery + Redis</span>
+        </div>
+      </div>
+
+      <!-- Tenant & Key Switcher -->
+      <div class="flex items-center space-x-3">
+        <div class="relative">
+          <button id="tenantModalBtn" class="flex items-center space-x-2 text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 transition">
+            <i data-lucide="key" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span id="tenantLabel">Master Admin</span>
+            <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400"></i>
+          </button>
+        </div>
+
+        <a href="/docs" target="_blank" class="flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition shadow-sm">
+          <span>Swagger Docs</span>
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN DASHBOARD CONTENT -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- LEFT COLUMN: DOCUMENT VAULT & INGESTION (4 COLS) -->
+    <div class="lg:col-span-4 flex flex-col space-y-6">
+      
+      <!-- Upload Card -->
+      <div class="glass-card rounded-2xl p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-2">
+            <i data-lucide="upload-cloud" class="w-4 h-4 text-emerald-400"></i>
+            <span>Document Ingestion</span>
+          </h2>
+          <span class="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 px-2 py-0.5 rounded-full">Page Preserved</span>
+        </div>
+
+        <!-- Drag & Drop Zone -->
+        <div id="dropZone" class="border-2 border-dashed border-slate-700/80 hover:border-emerald-500/60 rounded-xl p-6 text-center cursor-pointer transition bg-slate-900/40 hover:bg-slate-900/80 group">
+          <input type="file" id="fileInput" class="hidden" accept=".pdf,.docx,.txt,.md" />
+          <div class="w-12 h-12 rounded-full bg-slate-800/80 group-hover:bg-emerald-500/10 text-slate-400 group-hover:text-emerald-400 flex items-center justify-center mx-auto mb-3 transition">
+            <i data-lucide="file-up" class="w-6 h-6"></i>
+          </div>
+          <p class="text-xs font-semibold text-slate-200">Drag & drop contract or PDF</p>
+          <p class="text-[11px] text-slate-400 mt-1">PDF, DOCX, TXT (up to 25MB)</p>
+          <button type="button" class="mt-3 text-xs font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1 rounded-md border border-emerald-500/20 transition">
+            Browse Computer
+          </button>
+        </div>
+
+        <!-- Ingestion Progress / Notification Bar -->
+        <div id="uploadFeedback" class="hidden mt-3 p-2.5 rounded-lg text-xs font-medium border"></div>
+
+        <!-- Quick Sample Document Feeder -->
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
+          <span class="text-[11px] text-slate-400">Don't have a file ready?</span>
+          <button id="loadSampleDocBtn" class="text-xs text-cyan-400 hover:text-cyan-300 font-medium underline flex items-center space-x-1">
+            <span>Load Demo Contract</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Knowledge Base Documents List -->
+      <div class="glass-card rounded-2xl p-5 shadow-xl flex-1 flex flex-col min-h-[350px]">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-2">
+            <i data-lucide="folder-lock" class="w-4 h-4 text-emerald-400"></i>
+            <span>Indexed Documents</span>
+          </h2>
+          <span id="docCountBadge" class="text-xs font-mono bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700">0 files</span>
+        </div>
+
+        <div id="docsList" class="flex-1 space-y-2.5 overflow-y-auto custom-scroll pr-1 max-h-[420px]">
+          <!-- Loaded dynamically via JavaScript -->
+          <div class="text-center py-12 text-slate-500 text-xs">
+            <i data-lucide="file-search" class="w-8 h-8 mx-auto mb-2 opacity-40"></i>
+            <span>No documents uploaded yet.<br>Upload a contract above to begin.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: QUERY ENGINE & STRICT CITATION CONSOLE (8 COLS) -->
+    <div class="lg:col-span-8 flex flex-col space-y-6">
+
+      <!-- Query Console Card -->
+      <div class="glass-card rounded-2xl p-6 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div class="flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+            <h1 class="text-base font-bold text-white tracking-tight">Strict Citation Query Engine</h1>
+          </div>
+
+          <!-- Feature Flags & Toggles -->
+          <div class="flex items-center space-x-3 text-xs">
+            <label class="flex items-center space-x-2 cursor-pointer bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-800">
+              <input type="checkbox" id="streamToggle" checked class="rounded border-slate-700 text-emerald-500 focus:ring-0" />
+              <span class="text-slate-300 font-medium">SSE Token Streaming</span>
+            </label>
+            <div class="text-slate-400 flex items-center space-x-1">
+              <span>Top-K:</span>
+              <select id="topKSelect" class="bg-slate-900 border border-slate-700 rounded text-slate-200 px-1 py-0.5 text-xs focus:ring-0">
+                <option value="3">3</option>
+                <option value="5" selected>5</option>
+                <option value="8">8</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Query Input Bar -->
+        <form id="queryForm" class="relative">
+          <textarea
+            id="queryInput"
+            rows="2"
+            placeholder="Ask anything about your documents (e.g., 'What is the early cancellation penalty?')"
+            class="w-full bg-slate-900/90 border border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none resize-none font-sans"
+          ></textarea>
+          <div class="absolute right-3 bottom-3 flex items-center space-x-2">
+            <button
+              type="submit"
+              id="submitBtn"
+              class="flex items-center space-x-1.5 px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold rounded-lg text-xs transition shadow-md shadow-emerald-500/20 disabled:opacity-50"
+            >
+              <span>Execute RAG</span>
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </form>
+
+        <!-- Pre-set Test Queries for Instant Demo -->
+        <div class="mt-3 flex flex-wrap gap-2 text-[11px]">
+          <span class="text-slate-400 self-center">Try Demo Queries:</span>
+          <button type="button" class="preset-btn px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-md border border-slate-700 transition">
+            "What is the cancellation penalty?"
+          </button>
+          <button type="button" class="preset-btn px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded-md border border-slate-700 transition">
+            "What is the governing law of the contract?"
+          </button>
+          <button type="button" id="hallucinationTestBtn" class="px-2.5 py-1 bg-red-950/40 hover:bg-red-950/70 text-red-300 rounded-md border border-red-800/40 transition flex items-center space-x-1">
+            <i data-lucide="shield-alert" class="w-3 h-3 text-red-400"></i>
+            <span>Test Hallucination Guard</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- RESULTS DISPLAY CARD -->
+      <div id="resultsCard" class="glass-card rounded-2xl p-6 shadow-xl flex-1 flex flex-col space-y-5">
+        
+        <!-- Header Status -->
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-4">
+          <div class="flex items-center space-x-3">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-2">
+              <i data-lucide="bot" class="w-4 h-4 text-emerald-400"></i>
+              <span>Synthesized Response</span>
+            </h2>
+            <div id="confidenceBadge" class="hidden text-xs font-semibold px-2.5 py-0.5 rounded-full border"></div>
+          </div>
+
+          <div class="flex items-center space-x-2 text-xs">
+            <button id="toggleJsonBtn" class="text-slate-400 hover:text-slate-200 px-2 py-1 rounded bg-slate-800/60 border border-slate-700/60 flex items-center space-x-1 transition">
+              <i data-lucide="code" class="w-3.5 h-3.5"></i>
+              <span>View JSON</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Answer Text Display Area -->
+        <div class="min-h-[100px] relative">
+          <div id="emptyPromptState" class="text-center py-12 text-slate-500 text-xs">
+            <i data-lucide="message-square-dashed" class="w-8 h-8 mx-auto mb-2 opacity-40"></i>
+            <span>Enter a query above to execute Hybrid Vector Search + Strict Citation Synthesis.</span>
+          </div>
+          <div id="answerContent" class="hidden text-slate-100 leading-relaxed text-sm whitespace-pre-wrap font-sans font-normal"></div>
+          <div id="streamCursor" class="cursor-blink hidden"></div>
+        </div>
+
+        <!-- Citations Grid -->
+        <div id="citationsSection" class="hidden pt-4 border-t border-slate-800/80">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-2">
+              <i data-lucide="check-check" class="w-4 h-4 text-emerald-400"></i>
+              <span>Verified Source Citations</span>
+            </h3>
+            <span class="text-[11px] text-slate-400">Exact page & quote match</span>
+          </div>
+          
+          <div id="citationsList" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <!-- Injected via JavaScript -->
+          </div>
+        </div>
+
+        <!-- Raw JSON Inspector (Toggleable) -->
+        <div id="jsonInspector" class="hidden pt-4 border-t border-slate-800/80">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-mono text-slate-400">Machine-Readable Pydantic v2 Schema:</span>
+            <button id="copyJsonBtn" class="text-[11px] text-emerald-400 hover:text-emerald-300 font-mono flex items-center space-x-1">
+              <i data-lucide="copy" class="w-3 h-3"></i>
+              <span>Copy JSON</span>
+            </button>
+          </div>
+          <pre id="jsonContent" class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-300 overflow-x-auto border border-slate-800 max-h-60 custom-scroll"></pre>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- TENANT CONFIGURATION MODAL -->
+  <div id="tenantModal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-card rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-700">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+          <span>Multi-Tenant Access Key</span>
+        </h3>
+        <button id="closeModalBtn" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+
+      <div class="space-y-4 mt-4 text-xs">
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">X-API-Key Header:</label>
+          <input
+            type="text"
+            id="apiKeyInput"
+            placeholder="enterprise-super-secret-admin-key"
+            class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+          />
+          <p class="text-[11px] text-slate-400 mt-1">Default master key is preloaded for instant testing.</p>
+        </div>
+
+        <div class="pt-3 border-t border-slate-800 flex justify-end space-x-2">
+          <button id="saveKeyBtn" class="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-lg transition">
+            Save & Authenticate
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT APPLICATION LOGIC -->
+  <script>
+    lucide.createIcons();
+
+    // State
+    let state = {
+      apiKey: localStorage.getItem('rag_api_key') || 'enterprise-super-secret-admin-key',
+      documents: [],
+      lastResponse: null
+    };
+
+    // Elements
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const uploadFeedback = document.getElementById('uploadFeedback');
+    const docsList = document.getElementById('docsList');
+    const docCountBadge = document.getElementById('docCountBadge');
+    const queryForm = document.getElementById('queryForm');
+    const queryInput = document.getElementById('queryInput');
+    const submitBtn = document.getElementById('submitBtn');
+    const streamToggle = document.getElementById('streamToggle');
+    const topKSelect = document.getElementById('topKSelect');
+    const resultsCard = document.getElementById('resultsCard');
+    const emptyPromptState = document.getElementById('emptyPromptState');
+    const answerContent = document.getElementById('answerContent');
+    const streamCursor = document.getElementById('streamCursor');
+    const confidenceBadge = document.getElementById('confidenceBadge');
+    const citationsSection = document.getElementById('citationsSection');
+    const citationsList = document.getElementById('citationsList');
+    const jsonInspector = document.getElementById('jsonInspector');
+    const jsonContent = document.getElementById('jsonContent');
+    const toggleJsonBtn = document.getElementById('toggleJsonBtn');
+    const copyJsonBtn = document.getElementById('copyJsonBtn');
+    const tenantModal = document.getElementById('tenantModal');
+    const tenantModalBtn = document.getElementById('tenantModalBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const saveKeyBtn = document.getElementById('saveKeyBtn');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const loadSampleDocBtn = document.getElementById('loadSampleDocBtn');
+    const hallucinationTestBtn = document.getElementById('hallucinationTestBtn');
+
+    // Init
+    apiKeyInput.value = state.apiKey;
+    fetchDocuments();
+
+    // Tenant Modal Handlers
+    tenantModalBtn.addEventListener('click', () => tenantModal.classList.remove('hidden'));
+    closeModalBtn.addEventListener('click', () => tenantModal.classList.add('hidden'));
+    saveKeyBtn.addEventListener('click', () => {
+      state.apiKey = apiKeyInput.value.trim() || 'enterprise-super-secret-admin-key';
+      localStorage.setItem('rag_api_key', state.apiKey);
+      tenantModal.classList.add('hidden');
+      fetchDocuments();
+    });
+
+    // File Drag & Drop
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-emerald-500'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-emerald-500'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-emerald-500');
+      if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) uploadFile(e.target.files[0]);
+    });
+
+    // Upload Action
+    async function uploadFile(file) {
+      showUploadFeedback(`Uploading and queueing ${file.name}...`, 'info');
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const resp = await fetch('/api/v1/documents/upload', {
+          method: 'POST',
+          headers: { 'X-API-Key': state.apiKey },
+          body: formData
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.detail || 'Upload failed');
+        }
+
+        const data = await resp.json();
+        showUploadFeedback(`Successfully queued "${file.name}". Worker indexing in background...`, 'success');
+        fileInput.value = '';
+        fetchDocuments();
+
+        // Auto-poll document list for status transitions
+        setTimeout(fetchDocuments, 2000);
+        setTimeout(fetchDocuments, 6000);
+      } catch (err) {
+        showUploadFeedback(err.message, 'error');
+      }
+    }
+
+    function showUploadFeedback(msg, type) {
+      uploadFeedback.classList.remove('hidden', 'bg-emerald-950/50', 'text-emerald-300', 'border-emerald-800', 'bg-red-950/50', 'text-red-300', 'border-red-800', 'bg-slate-900', 'text-slate-300', 'border-slate-700');
+      if (type === 'success') {
+        uploadFeedback.classList.add('bg-emerald-950/50', 'text-emerald-300', 'border-emerald-800');
+      } else if (type === 'error') {
+        uploadFeedback.classList.add('bg-red-950/50', 'text-red-300', 'border-red-800');
+      } else {
+        uploadFeedback.classList.add('bg-slate-900', 'text-slate-300', 'border-slate-700');
+      }
+      uploadFeedback.textContent = msg;
+    }
+
+    // Load Demo Contract Button
+    loadSampleDocBtn.addEventListener('click', async () => {
+      const sampleText = `ACME ENTERPRISE MASTER SERVICES AGREEMENT (MSA)
+SECTION 1: ENGAGEMENT & SCOPE
+Acme Technologies agrees to provide enterprise artificial intelligence document microservice infrastructure to the Client.
+
+SECTION 4: FEES, PAYMENT & CANCELLATION PENALTIES
+4.1 Invoicing: Invoices are payable net thirty (30) days from the invoice date.
+4.2 Early Cancellation Penalty: In the event of early termination by the Client within the initial thirty (30) days of execution, a cancellation fee equal to exactly 15% of the total agreement valuation shall become immediately due and payable.
+4.3 Late Payment Interest: Overdue invoices shall accrue interest at 1.5% per month.
+
+SECTION 7: INTELLECTUAL PROPERTY & DATA PRIVACY
+7.1 Client Data Ownership: All raw documents, vector representations, and query logs remain the exclusive intellectual property of the Client.
+7.2 Confidentiality: Provider shall maintain state-of-the-art encryption at rest and in transit.
+
+SECTION 11: GOVERNING LAW & JURISDICTION
+This Agreement shall be construed and governed in all respects under the laws of the State of Delaware, without regard to conflict of laws principles.`;
+
+      const blob = new Blob([sampleText], { type: 'text/plain' });
+      const file = new File([blob], 'Enterprise_MSA_Contract_v1.txt', { type: 'text/plain' });
+      uploadFile(file);
+    });
+
+    // Fetch Documents
+    async function fetchDocuments() {
+      try {
+        const resp = await fetch('/api/v1/documents', {
+          headers: { 'X-API-Key': state.apiKey }
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        state.documents = data.documents;
+        renderDocuments();
+      } catch (err) {
+        console.error('Fetch docs error:', err);
+      }
+    }
+
+    function renderDocuments() {
+      docCountBadge.textContent = `${state.documents.length} files`;
+      if (!state.documents.length) {
+        docsList.innerHTML = `
+          <div class="text-center py-12 text-slate-500 text-xs">
+            <i data-lucide="file-search" class="w-8 h-8 mx-auto mb-2 opacity-40"></i>
+            <span>No documents uploaded yet.<br>Upload a contract above to begin.</span>
+          </div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      docsList.innerHTML = state.documents.map(doc => {
+        const sizeKb = (doc.file_size_bytes / 1024).toFixed(1);
+        const statusColors = {
+          indexed: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/40',
+          processing: 'bg-blue-950/60 text-blue-400 border-blue-800/40',
+          pending: 'bg-amber-950/60 text-amber-400 border-amber-800/40',
+          failed: 'bg-red-950/60 text-red-400 border-red-800/40'
+        }[doc.status] || 'bg-slate-800 text-slate-300';
+
+        return `
+          <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition flex items-center justify-between text-xs">
+            <div class="flex items-center space-x-3 overflow-hidden">
+              <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0 text-slate-300">
+                <i data-lucide="file-text" class="w-4 h-4"></i>
+              </div>
+              <div class="truncate">
+                <div class="font-semibold text-slate-200 truncate" title="${doc.filename}">${doc.filename}</div>
+                <div class="text-[10px] text-slate-500 flex items-center space-x-2">
+                  <span>${sizeKb} KB</span>
+                  <span>•</span>
+                  <span>${doc.total_pages > 0 ? doc.total_pages + ' pages' : 'Pending chunks'}</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center space-x-2 shrink-0">
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded-full border uppercase ${statusColors}">${doc.status}</span>
+              <button onclick="deleteDoc('${doc.id}')" class="text-slate-500 hover:text-red-400 p-1 transition" title="Delete Document">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    async function deleteDoc(docId) {
+      if (!confirm('Delete this document and all its indexed vector chunks?')) return;
+      try {
+        await fetch(`/api/v1/documents/${docId}`, {
+          method: 'DELETE',
+          headers: { 'X-API-Key': state.apiKey }
+        });
+        fetchDocuments();
+      } catch (err) {
+        alert('Failed to delete document');
+      }
+    }
+    window.deleteDoc = deleteDoc;
+
+    // Presets
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        queryInput.value = btn.textContent.replace(/"/g, '').trim();
+        queryForm.dispatchEvent(new Event('submit'));
+      });
+    });
+
+    hallucinationTestBtn.addEventListener('click', () => {
+      queryInput.value = "What is the warranty policy for Mars interplanetary shuttle missions?";
+      queryForm.dispatchEvent(new Event('submit'));
+    });
+
+    // Query Submission
+    queryForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const q = queryInput.value.trim();
+      if (!q) return;
+
+      submitBtn.disabled = true;
+      emptyPromptState.classList.add('hidden');
+      answerContent.classList.remove('hidden');
+      answerContent.textContent = '';
+      citationsSection.classList.add('hidden');
+      confidenceBadge.classList.add('hidden');
+      jsonInspector.classList.add('hidden');
+
+      const isStream = streamToggle.checked;
+      const topK = parseInt(topKSelect.value);
+
+      if (isStream) {
+        await executeStreamingQuery(q, topK);
+      } else {
+        await executeSyncQuery(q, topK);
+      }
+
+      submitBtn.disabled = false;
+    });
+
+    // Synchronous Query
+    async function executeSyncQuery(query, topK) {
+      try {
+        answerContent.textContent = "Synthesizing answer using pgvector HNSW + BM25 tsvector + FlashRank reranking...";
+        const resp = await fetch('/api/v1/query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': state.apiKey
+          },
+          body: JSON.stringify({ query, top_k: topK })
+        });
+
+        const data = await resp.json();
+        state.lastResponse = data;
+        displayResponse(data);
+      } catch (err) {
+        answerContent.textContent = "Error executing query: " + err.message;
+      }
+    }
+
+    // SSE Streaming Query via Fetch ReadableStream
+    async function executeStreamingQuery(query, topK) {
+      streamCursor.classList.remove('hidden');
+      try {
+        const response = await fetch('/api/v1/query/stream', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': state.apiKey
+          },
+          body: JSON.stringify({ query, top_k: topK })
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullAnswer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop(); // Keep last partial chunk
+
+          for (const line of lines) {
+            const match = line.match(/^data:\s*(.*)$/m);
+            if (match) {
+              try {
+                const parsed = JSON.parse(match[1]);
+                if (parsed.type === 'token') {
+                  fullAnswer += parsed.content;
+                  answerContent.innerHTML = formatMarkdown(fullAnswer);
+                } else if (parsed.type === 'final') {
+                  state.lastResponse = {
+                    answer: fullAnswer,
+                    confidence: parsed.confidence,
+                    citations: parsed.citations,
+                    information_found: parsed.information_found
+                  };
+                  displayFinalMetadata(parsed);
+                }
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (err) {
+        answerContent.textContent = "Streaming error: " + err.message;
+      } finally {
+        streamCursor.classList.add('hidden');
+      }
+    }
+
+    function formatMarkdown(text) {
+      if (!text) return '';
+      // Escape HTML
+      let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      
+      // Bold **text**
+      html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-bold">$1</strong>');
+      
+      // Bullets • text or - text
+      html = html.replace(/^[•\-]\s+(.*)$/gm, '<li class="ml-4 list-disc text-slate-200 my-1">$1</li>');
+
+      // Paragraphs
+      html = html.replace(/\n\n/g, '<div class="h-3"></div>');
+      html = html.replace(/\n/g, '<br/>');
+
+      return html;
+    }
+
+    function displayResponse(data) {
+      answerContent.innerHTML = formatMarkdown(data.answer);
+      displayFinalMetadata(data);
+    }
+
+    function displayFinalMetadata(data) {
+      // Confidence Badge
+      confidenceBadge.classList.remove('hidden', 'bg-emerald-950/60', 'text-emerald-400', 'border-emerald-800/40', 'bg-amber-950/60', 'text-amber-400', 'border-amber-800/40', 'bg-red-950/60', 'text-red-400', 'border-red-800/40');
+      
+      const config = {
+        high: { label: 'High Confidence (Strict Citation)', cls: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/40' },
+        medium: { label: 'Medium Confidence', cls: 'bg-amber-950/60 text-amber-400 border-amber-800/40' },
+        low: { label: 'Low Confidence / Fallback Guard', cls: 'bg-red-950/60 text-red-400 border-red-800/40' }
+      }[data.confidence] || { label: data.confidence, cls: 'bg-slate-800 text-slate-300' };
+
+      confidenceBadge.textContent = config.label;
+      confidenceBadge.className = `text-xs font-semibold px-2.5 py-0.5 rounded-full border ${config.cls}`;
+
+      // Citations
+      if (data.citations && data.citations.length > 0) {
+        citationsSection.classList.remove('hidden');
+        citationsList.innerHTML = data.citations.map((c, i) => `
+          <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-emerald-500/30 transition text-xs flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="font-bold text-slate-200 flex items-center space-x-1.5 truncate" title="${c.source_filename}">
+                  <i data-lucide="file-check" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i>
+                  <span class="truncate">${c.source_filename}</span>
+                </span>
+                <span class="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/50 shrink-0">
+                  Page ${c.page_number}
+                </span>
+              </div>
+              <blockquote class="border-l-2 border-emerald-500/60 pl-2.5 py-0.5 text-slate-400 italic text-[11px] leading-relaxed">
+                "${c.exact_quote}"
+              </blockquote>
+            </div>
+            <div class="mt-2.5 pt-2 border-t border-slate-800/60 text-[10px] text-slate-400 flex items-center justify-between font-mono">
+              <span>Doc ID: ${c.document_id.slice(0, 8)}...</span>
+              <span class="text-emerald-400 font-semibold">100% Verbatim Match</span>
+            </div>
+          </div>
+        `).join('');
+        lucide.createIcons();
+      } else {
+        citationsSection.classList.add('hidden');
+      }
+
+      // JSON preview update
+      jsonContent.textContent = JSON.stringify(data, null, 2);
+    }
+
+    toggleJsonBtn.addEventListener('click', () => {
+      jsonInspector.classList.toggle('hidden');
+    });
+
+    copyJsonBtn.addEventListener('click', () => {
+      if (state.lastResponse) {
+        navigator.clipboard.writeText(JSON.stringify(state.lastResponse, null, 2));
+        copyJsonBtn.textContent = "Copied!";
+        setTimeout(() => copyJsonBtn.innerHTML = '<i data-lucide="copy" class="w-3 h-3"></i><span>Copy JSON</span>', 1500);
+      }
+    });
+  </script>
+</body>
+</html>

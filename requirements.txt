@@ -1,0 +1,34 @@
+# Core FastAPI & Server
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+python-multipart>=0.0.17
+sse-starlette>=2.1.3
+
+# Database & Vectors
+SQLAlchemy[asyncio]>=2.0.36
+asyncpg>=0.30.0
+pgvector>=0.3.6
+psycopg[binary]>=3.2.3
+psycopg2-binary>=2.9.10
+alembic>=1.14.0
+
+# Background Worker & Cache
+celery>=5.4.0
+redis>=5.2.0
+
+# Document Parsing & Chunking
+PyMuPDF>=1.24.14
+docx2txt>=0.8
+
+# Embeddings & Reranking (0-Cost Local Defaults + Cloud support)
+fastembed>=0.4.1
+flashrank>=0.2.9
+openai>=1.54.0
+
+# Utilities
+httpx>=0.27.2
+loguru>=0.7.2
+python-dotenv>=1.0.1
+aiofiles>=24.1.0
